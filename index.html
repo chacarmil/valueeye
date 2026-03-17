@@ -223,7 +223,7 @@ const { createClient } = supabase;
 const db = createClient(SUPA_URL, SUPA_KEY);
 
 // NOTE: Valuation calls go to /api/anthropic (Netlify Function) — never directly to Anthropic
-const API_ENDPOINT = '/api/anthropic';
+const API_ENDPOINT = '/.netlify/functions/anthropic';
 
 let projects = [], currentItems = [], currentProjId = null;
 let currentTab = 'field', newProjTarget = 'field', stagedItems = [];
@@ -676,5 +676,6 @@ loadProjects();
 </script>
 </body>
 </html>
+
 
 
