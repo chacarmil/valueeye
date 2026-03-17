@@ -177,6 +177,13 @@ textarea{resize:vertical;min-height:68px;}
     </div>
     <div id="field-success" style="display:none;" class="alert alert-success"></div>
     <div id="field-error" style="display:none;" class="alert alert-error"></div>
+    <div id="field-submitted-wrap" style="display:none;margin-top:6px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div class="lbl" style="margin-bottom:0;">Submitted Items (<span id="field-submitted-count">0</span>)</div>
+        <button class="btn btn-outline btn-sm" onclick="loadFieldSubmitted()">↻ Refresh</button>
+      </div>
+      <div id="field-submitted-list"></div>
+    </div>
   </div>
 </div>
 
@@ -301,6 +308,7 @@ async function openProject(projId, tab) {
     document.getElementById('field-proj-addr').textContent = p.address||'';
     stagedItems = [];
     ['field-staged','field-success','field-error'].forEach(id=>document.getElementById(id).style.display='none');
+    loadFieldSubmitted();
   } else {
     document.getElementById('review-project-list').style.display = 'none';
     document.getElementById('review-project-detail').style.display = 'block';
@@ -331,8 +339,8 @@ function handleFieldFiles(e) {
     const mime = file.type||'image/jpeg';
     const reader = new FileReader();
     reader.onload = ev => {
-      compressImage(ev.target.result, (compressed, b64) => {
-        stagedItems.push({name:'',notes:'',base64:b64,mime,preview:compressed});
+      compressImage(ev.target.result, (compressed, b64, normalizedMime) => {
+        stagedItems.push({name:'',notes:'',base64:b64,mime:normalizedMime,preview:compressed});
         renderStaged();
       });
     };
@@ -351,8 +359,9 @@ function compressImage(dataUrl, cb) {
     if (h>MAX){w=Math.round(w*MAX/h);h=MAX;}
     canvas.width=w; canvas.height=h;
     canvas.getContext('2d').drawImage(img,0,0,w,h);
-    const compressed = canvas.toDataURL('image/jpeg',0.82);
-    cb(compressed, compressed.split(',')[1]);
+    // Always output as JPEG to avoid mime type mismatches
+    const compressed = canvas.toDataURL('image/jpeg', 0.82);
+    cb(compressed, compressed.split(',')[1], 'image/jpeg');
   };
   img.src = dataUrl;
 }
@@ -455,7 +464,10 @@ function renderItemCard(item) {
         <div class="item-badges">${badge}${confLabel?`<span class="badge" style="background:var(--fog);color:var(--muted);border:1px solid var(--border)">${confLabel} conf.</span>`:''}</div>
         ${conf>0?`<div class="conf-bar"><div class="conf-track"><div class="conf-fill" style="width:${confPct}%"></div></div><span class="conf-label">${confPct}%</span></div>`:''}
       </div>
-      <button class="btn btn-outline btn-sm" style="flex-shrink:0;align-self:flex-start;" onclick="toggleValPanel('${item.id}')">▾</button>
+      <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+        <button class="btn btn-outline btn-sm" style="align-self:flex-start;" onclick="toggleValPanel('${item.id}')">▾ Details</button>
+        <button class="btn btn-rust btn-sm" style="align-self:flex-start;" onclick="deleteItem('${item.id}','review')">🗑 Delete</button>
+      </div>
     </div>
     <div class="val-panel" id="vp-${item.id}">
       ${hasValue?`<div class="val-grid">
@@ -626,6 +638,68 @@ async function saveNote(itemId) {
     btn.textContent='Saved ✓';btn.style.background='var(--sage)';btn.style.color='#fff';
     setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';},2000);
   }catch(e){setSyncState('error');alert('Save failed: '+e.message);}
+}
+
+async function loadFieldSubmitted() {
+  if (!currentProjId) return;
+  const wrap = document.getElementById('field-submitted-wrap');
+  const list = document.getElementById('field-submitted-list');
+  if (!wrap || !list) return;
+  list.innerHTML = '<div style="color:var(--muted);font-size:.83rem;padding:8px 0;"><span class="spinner"></span>Loading…</div>';
+  wrap.style.display = 'block';
+  try {
+    const {data, error} = await db.from('ve_items').select('id,name,field_notes,image_base64,image_mime,submitted_at,status,valuation').eq('project_id', currentProjId).order('submitted_at',{ascending:false});
+    if (error) throw error;
+    document.getElementById('field-submitted-count').textContent = data.length;
+    if (data.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:.83rem;padding:8px 0;text-align:center;">No items submitted yet.</div>';
+      return;
+    }
+    list.innerHTML = data.map(item => {
+      const thumb = item.image_base64 ? `<img src="data:${item.image_mime};base64,${item.image_base64}" style="width:54px;height:54px;border-radius:8px;object-fit:cover;border:1.5px solid var(--border);flex-shrink:0;">` : `<div style="width:54px;height:54px;border-radius:8px;background:var(--fog);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;">🖼</div>`;
+      const statusBadge = item.valuation ? '<span class="badge badge-valued">Valued</span>' : '<span class="badge badge-pending">Pending</span>';
+      const date = new Date(item.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<div style="display:flex;gap:10px;align-items:center;background:var(--white);border:1.5px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;">
+        ${thumb}
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:'Playfair Display',serif;font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(item.name||'Unnamed Item')}</div>
+          ${item.field_notes ? `<div style="font-size:.75rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(item.field_notes)}</div>` : ''}
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">${statusBadge}<span style="font-size:.7rem;color:var(--muted);">${date}</span></div>
+        </div>
+        <button onclick="deleteItem('${item.id}','field')" style="background:none;border:1.5px solid var(--border);border-radius:7px;padding:5px 9px;cursor:pointer;color:var(--rust);font-size:.8rem;flex-shrink:0;transition:all .16s;" onmouseover="this.style.background='#fdecea'" onmouseout="this.style.background='none'">🗑</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--rust);font-size:.83rem;padding:8px 0;">Failed to load: ' + e.message + '</div>';
+  }
+}
+
+async function deleteItem(itemId, source) {
+  if (!confirm('Delete this item? This cannot be undone.')) return;
+  setSyncState('syncing');
+  try {
+    const {error} = await db.from('ve_items').delete().eq('id', itemId);
+    if (error) throw error;
+    // Update project counts
+    const {data:cd} = await db.from('ve_items').select('id',{count:'exact'}).eq('project_id',currentProjId);
+    const {data:pd} = await db.from('ve_items').select('id',{count:'exact'}).eq('project_id',currentProjId).is('valuation',null).is('manual_value',null);
+    await db.from('ve_projects').update({item_count:cd?.length||0, pending_count:pd?.length||0}).eq('id',currentProjId);
+    setSyncState('ok');
+    if (source === 'field') {
+      loadFieldSubmitted();
+    } else {
+      currentItems = currentItems.filter(i => i.id !== itemId);
+      // Remove card from DOM instantly
+      const card = document.getElementById('icard-' + itemId);
+      if (card) card.remove();
+      // Re-render header totals
+      const p = projects.find(x => x.id === currentProjId);
+      if (p) renderReviewDetail(p);
+    }
+  } catch(e) {
+    setSyncState('error');
+    alert('Delete failed: ' + e.message);
+  }
 }
 
 function exportProjectCSV() {
