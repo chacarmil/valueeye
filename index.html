@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Value Eye">
+<meta name="theme-color" content="#1a1209">
+<title>Value Eye — Antique Valuator</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --ink:#1a1209;--parchment:#f7f2e8;--gold:#c8912a;--gold-light:#e8c97a;--gold-bg:#fdf8ee;
+  --rust:#9b3a1a;--sage:#3d6b35;--sage-light:#ddebd9;--fog:#ede8df;--muted:#8a7d6a;
+  --white:#fff;--border:#ddd4c0;--shadow:0 4px 24px rgba(26,18,9,.10);--radius:14px;
+  --blue:#1a5fa8;--blue-light:#e8f0fb;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--parchment);color:var(--ink);min-height:100vh;font-size:15px;}
+.top-bar{background:var(--ink);color:var(--gold-light);display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:54px;position:sticky;top:0;z-index:200;}
+.logo{font-family:'Playfair Display',serif;font-size:1.15rem;letter-spacing:.04em;}
+.logo span{color:var(--gold);}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;margin-left:6px;vertical-align:middle;}
+.sync-dot.syncing{background:var(--gold-light);animation:pulse 1s infinite;}
+.sync-dot.error{background:#f87171;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.tab-nav{display:flex;gap:2px;background:#2a2010;border-radius:8px;padding:3px;}
+.tab-btn{background:none;border:none;color:#a0906a;font-family:'DM Sans',sans-serif;font-size:.78rem;font-weight:500;padding:5px 13px;border-radius:6px;cursor:pointer;transition:all .18s;}
+.tab-btn.active{background:var(--gold);color:var(--ink);}
+.view{display:none;padding:18px 14px 80px;max-width:760px;margin:0 auto;width:100%;}
+.view.active{display:block;}
+.vh{font-family:'Playfair Display',serif;font-size:1.45rem;font-weight:700;color:var(--ink);margin-bottom:3px;margin-top:6px;}
+.vs{color:var(--muted);font-size:.83rem;margin-bottom:18px;}
+.card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:14px;}
+.card-body{padding:16px;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:.84rem;font-weight:500;cursor:pointer;border:1.5px solid transparent;transition:all .17s;}
+.btn-primary{background:var(--ink);color:var(--gold-light);border-color:var(--ink);}
+.btn-primary:hover{background:#2e1e0a;}
+.btn-gold{background:var(--gold);color:var(--ink);border-color:var(--gold);}
+.btn-gold:hover{background:#b07820;}
+.btn-outline{background:var(--white);color:var(--ink);border-color:var(--border);}
+.btn-outline:hover{background:var(--fog);border-color:var(--muted);}
+.btn-sage{background:var(--sage-light);color:var(--sage);border-color:#aad4a0;}
+.btn-sage:hover{background:#c8ecc4;}
+.btn-rust{background:#fdecea;color:var(--rust);border-color:#f0b0a0;}
+.btn-rust:hover{background:#fbd8d4;}
+.btn-sm{padding:5px 12px;font-size:.76rem;border-radius:6px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.lbl{display:block;font-size:.76rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+input[type=text],input[type=date],input[type=number],textarea,select{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px 13px;font-family:'DM Sans',sans-serif;font-size:.93rem;background:var(--white);color:var(--ink);outline:none;transition:border-color .18s;}
+input:focus,textarea:focus,select:focus{border-color:var(--gold);}
+textarea{resize:vertical;min-height:68px;}
+.form-row{margin-bottom:13px;}
+.proj-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:15px 16px;margin-bottom:11px;cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:14px;}
+.proj-card:hover{border-color:var(--gold);background:var(--gold-bg);}
+.proj-icon{font-size:1.8rem;flex-shrink:0;}
+.proj-info{flex:1;min-width:0;}
+.proj-name{font-family:'Playfair Display',serif;font-size:1rem;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.proj-meta{font-size:.78rem;color:var(--muted);}
+.proj-badge{background:var(--gold-bg);border:1px solid var(--gold-light);color:#7a5010;border-radius:20px;padding:3px 11px;font-size:.72rem;font-weight:600;white-space:nowrap;}
+.back-btn{background:none;border:none;color:var(--muted);font-size:.85rem;cursor:pointer;padding:0;margin-bottom:12px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px;}
+.back-btn:hover{color:var(--ink);}
+.project-header{background:var(--ink);color:var(--gold-light);border-radius:var(--radius);padding:18px;margin-bottom:16px;}
+.project-header h2{font-family:'Playfair Display',serif;font-size:1.3rem;margin-bottom:4px;}
+.project-header .ph-meta{font-size:.8rem;color:#a09070;margin-bottom:12px;}
+.totals-row{display:flex;gap:8px;flex-wrap:wrap;}
+.total-chip{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:9px;padding:10px 13px;flex:1;min-width:80px;}
+.total-chip .tc-num{font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--gold-light);}
+.total-chip .tc-lbl{font-size:.65rem;color:#908060;text-transform:uppercase;letter-spacing:.05em;margin-top:1px;}
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:28px 16px;text-align:center;cursor:pointer;background:var(--white);transition:all .2s;position:relative;margin-bottom:14px;}
+.upload-zone:hover{border-color:var(--gold);background:var(--gold-bg);}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-zone .uz-icon{font-size:2.2rem;margin-bottom:8px;}
+.upload-zone p{color:var(--muted);font-size:.85rem;}
+.upload-zone strong{color:var(--ink);display:block;margin-bottom:3px;}
+.item-card{background:var(--white);border:1.5px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;}
+.item-top{display:flex;gap:12px;padding:13px;}
+.item-thumb{width:76px;height:76px;border-radius:8px;object-fit:cover;border:1.5px solid var(--border);flex-shrink:0;}
+.item-thumb-ph{width:76px;height:76px;border-radius:8px;background:var(--fog);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0;}
+.item-info{flex:1;min-width:0;}
+.item-name{font-family:'Playfair Display',serif;font-size:.97rem;font-weight:600;margin-bottom:2px;}
+.item-note{font-size:.77rem;color:var(--muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.item-badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.7rem;font-weight:600;letter-spacing:.03em;}
+.badge-pending{background:#fef3e2;color:#9a6010;border:1px solid #f0d090;}
+.badge-valued{background:var(--sage-light);color:var(--sage);border:1px solid #aad4a0;}
+.badge-manual{background:var(--blue-light);color:var(--blue);border:1px solid #b0cef0;}
+.conf-bar{display:flex;align-items:center;gap:6px;margin-top:4px;}
+.conf-track{height:5px;flex:1;background:var(--fog);border-radius:3px;overflow:hidden;max-width:80px;}
+.conf-fill{height:100%;border-radius:3px;background:var(--gold);}
+.conf-label{font-size:.7rem;color:var(--muted);}
+.val-panel{border-top:1.5px solid var(--border);padding:13px;background:#fdfbf7;display:none;}
+.val-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;}
+.val-cell{background:var(--white);border:1.5px solid var(--border);border-radius:8px;padding:9px;text-align:center;}
+.val-cell .vc-amt{font-family:'Playfair Display',serif;font-size:1.05rem;font-weight:600;color:var(--ink);}
+.val-cell .vc-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+.val-cell.expected{border-color:var(--gold);background:var(--gold-bg);}
+.val-cell.expected .vc-amt{color:#9a6010;}
+.manual-edit{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+.manual-edit input{max-width:130px;padding:7px 11px;font-size:.88rem;}
+.comps-section{margin-top:10px;}
+.comps-title{font-size:.75rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;}
+.comp-link{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--white);border:1.5px solid var(--border);border-radius:8px;margin-bottom:5px;text-decoration:none;color:var(--ink);font-size:.82rem;transition:all .16s;}
+.comp-link:hover{border-color:var(--gold);background:var(--gold-bg);}
+.comp-price{font-weight:600;color:var(--sage);white-space:nowrap;}
+.comp-source{font-size:.68rem;color:var(--muted);margin-left:auto;white-space:nowrap;padding-left:6px;}
+.notes-area{margin-top:10px;}
+.notes-area textarea{font-size:.85rem;min-height:55px;}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px;}
+.spinner-lg{width:32px;height:32px;border-width:3px;margin:0 auto 12px;display:block;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:36px 20px;color:var(--muted);}
+.empty .ei{font-size:2.5rem;margin-bottom:10px;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;display:none;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--white);border-radius:var(--radius);padding:22px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;}
+.modal h3{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:14px;}
+.modal-btns{display:flex;gap:9px;justify-content:flex-end;margin-top:16px;}
+.queue-banner{background:var(--blue-light);border:1.5px solid #b0cef0;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:.83rem;color:var(--blue);}
+.alert{border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:.83rem;}
+.alert-success{background:var(--sage-light);border:1.5px solid #aad4a0;color:var(--sage);}
+.alert-error{background:#fdecea;border:1.5px solid #f0b0a0;color:var(--rust);}
+.loading-screen{position:fixed;inset:0;background:var(--parchment);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.loading-screen .logo-big{font-family:'Playfair Display',serif;font-size:2rem;color:var(--ink);margin-bottom:8px;}
+.loading-screen .logo-big span{color:var(--gold);}
+@media(max-width:480px){.val-grid{grid-template-columns:1fr 1fr;}.total-chip{min-width:70px;}}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="logo-big">Value <span>Eye</span></div>
+  <div class="spinner spinner-lg" style="margin-top:20px;"></div>
+  <p style="margin-top:12px;color:var(--muted);font-size:.85rem;">Connecting to database…</p>
+</div>
+
+<div class="top-bar">
+  <span class="logo">Value <span>Eye</span><span class="sync-dot" id="syncDot"></span></span>
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('field')">Field</button>
+    <button class="tab-btn" onclick="switchTab('review')">Review</button>
+  </div>
+</div>
+
+<!-- FIELD VIEW -->
+<div class="view active" id="view-field">
+  <div id="field-project-list">
+    <div class="vh">Field Submissions</div>
+    <p class="vs">Select a project or create a new one</p>
+    <button class="btn btn-gold" onclick="openNewProjectModal('field')" style="margin-bottom:16px;">＋ New Project</button>
+    <div id="field-proj-items"></div>
+  </div>
+  <div id="field-project-detail" style="display:none">
+    <button class="back-btn" onclick="backToList('field')">← All Projects</button>
+    <div class="card card-body" style="margin-bottom:14px;">
+      <div class="lbl">Current Project</div>
+      <div id="field-proj-title" style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:600;margin-bottom:2px;"></div>
+      <div id="field-proj-addr" style="font-size:.82rem;color:var(--muted);"></div>
+    </div>
+    <div class="upload-zone">
+      <input type="file" accept="image/*" capture="environment" id="fieldFileInput" multiple onchange="handleFieldFiles(event)"/>
+      <div class="uz-icon">📸</div>
+      <strong>Tap to photograph items</strong>
+      <p>Multiple photos supported · JPG, PNG, WEBP</p>
+    </div>
+    <div id="field-staged" style="display:none;margin-bottom:14px;">
+      <div class="lbl" style="margin-bottom:8px;">Ready to Submit (<span id="staged-count">0</span>)</div>
+      <div id="staged-list"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:6px;" onclick="submitStagedItems()">Submit All to Project →</button>
+    </div>
+    <div id="field-success" style="display:none;" class="alert alert-success"></div>
+    <div id="field-error" style="display:none;" class="alert alert-error"></div>
+  </div>
+</div>
+
+<!-- REVIEW VIEW -->
+<div class="view" id="view-review">
+  <div id="review-project-list">
+    <div class="vh">Review Dashboard</div>
+    <p class="vs">Select a project to review items and valuations</p>
+    <button class="btn btn-gold" onclick="openNewProjectModal('review')" style="margin-bottom:16px;">＋ New Project</button>
+    <div id="review-proj-items"></div>
+  </div>
+  <div id="review-project-detail" style="display:none">
+    <button class="back-btn" onclick="backToList('review')">← All Projects</button>
+    <div class="project-header" id="review-proj-header"></div>
+    <div id="queue-banner" style="display:none;" class="queue-banner"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button class="btn btn-gold btn-sm" onclick="valueAllPending()">⚡ Value All Pending</button>
+      <button class="btn btn-outline btn-sm" onclick="refreshProject()">↻ Refresh</button>
+      <button class="btn btn-outline btn-sm" onclick="exportProjectCSV()">⬇ Export CSV</button>
+    </div>
+    <div id="review-items-list"></div>
+  </div>
+</div>
+
+<!-- NEW PROJECT MODAL -->
+<div class="modal-overlay" id="newProjModal">
+  <div class="modal">
+    <h3>Create New Project</h3>
+    <div class="form-row"><label class="lbl">Project Name</label><input type="text" id="newProjName" placeholder="e.g. Smith Estate — 3 Bed House"></div>
+    <div class="form-row"><label class="lbl">Address / Location</label><input type="text" id="newProjAddr" placeholder="e.g. 742 Evergreen Terrace, Springfield IL"></div>
+    <div class="form-row"><label class="lbl">Date</label><input type="date" id="newProjDate"></div>
+    <div class="form-row"><label class="lbl">Notes (optional)</label><textarea id="newProjNotes" placeholder="Client name, special instructions…"></textarea></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="createProjBtn" onclick="createProject()">Create Project</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL = 'https://cmhivclyaylmmfoucpuj.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtaGl2Y2x5YXlsbW1mb3VjcHVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MTU1MzIsImV4cCI6MjA4OTI5MTUzMn0.DAhMymwdboGYJD2-JChBYgg87R3s0nVHHGZKae9PvUI';
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+
+// NOTE: Valuation calls go to /api/anthropic (Netlify Function) — never directly to Anthropic
+const API_ENDPOINT = '/api/anthropic';
+
+let projects = [], currentItems = [], currentProjId = null;
+let currentTab = 'field', newProjTarget = 'field', stagedItems = [];
+
+function setSyncState(s) {
+  const d = document.getElementById('syncDot');
+  d.className = 'sync-dot' + (s==='syncing'?' syncing':s==='error'?' error':'');
+}
+
+async function loadProjects() {
+  setSyncState('syncing');
+  try {
+    const { data, error } = await db.from('ve_projects').select('*').order('created_at',{ascending:false});
+    if (error) throw error;
+    projects = data || [];
+    setSyncState('ok');
+  } catch(e) { setSyncState('error'); projects = []; }
+  renderProjectLists();
+  document.getElementById('loadingScreen').style.display = 'none';
+}
+
+async function loadProjectItems(projId) {
+  setSyncState('syncing');
+  try {
+    const { data, error } = await db.from('ve_items').select('*').eq('project_id',projId).order('submitted_at',{ascending:false});
+    if (error) throw error;
+    currentItems = data || [];
+    setSyncState('ok');
+  } catch(e) { setSyncState('error'); currentItems = []; }
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('view-'+tab).classList.add('active');
+  document.querySelectorAll('.tab-btn')[tab==='field'?0:1].classList.add('active');
+  if (!currentProjId) loadProjects();
+}
+
+function renderProjectLists() {
+  ['field','review'].forEach(tab => {
+    const el = document.getElementById(tab+'-proj-items');
+    if (!el) return;
+    if (projects.length === 0) {
+      el.innerHTML = `<div class="empty"><div class="ei">📁</div><p>No projects yet.<br>Create one to get started.</p></div>`;
+      return;
+    }
+    el.innerHTML = projects.map(p => {
+      const ic = p.item_count||0, pending = p.pending_count||0;
+      return `<div class="proj-card" onclick="openProject('${p.id}','${tab}')">
+        <div class="proj-icon">🏠</div>
+        <div class="proj-info">
+          <div class="proj-name">${esc(p.name)}</div>
+          <div class="proj-meta">${esc(p.address||'')}${p.date?' · '+formatDate(p.date):''}</div>
+          ${p.notes?`<div class="proj-meta" style="margin-top:2px">${esc(p.notes.substring(0,55))}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div class="proj-badge">${ic} item${ic!==1?'s':''}</div>
+          ${pending>0?`<div style="font-size:.68rem;color:var(--rust);margin-top:4px">${pending} pending</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+
+async function openProject(projId, tab) {
+  currentProjId = projId;
+  const p = projects.find(x=>x.id===projId);
+  if (!p) return;
+  if (tab === 'field') {
+    document.getElementById('field-project-list').style.display = 'none';
+    document.getElementById('field-project-detail').style.display = 'block';
+    document.getElementById('field-proj-title').textContent = p.name;
+    document.getElementById('field-proj-addr').textContent = p.address||'';
+    stagedItems = [];
+    ['field-staged','field-success','field-error'].forEach(id=>document.getElementById(id).style.display='none');
+  } else {
+    document.getElementById('review-project-list').style.display = 'none';
+    document.getElementById('review-project-detail').style.display = 'block';
+    document.getElementById('review-items-list').innerHTML = `<div class="empty"><div class="spinner spinner-lg"></div><p>Loading items…</p></div>`;
+    await loadProjectItems(projId);
+    renderReviewDetail(p);
+  }
+}
+
+function backToList(tab) {
+  currentProjId = null; currentItems = [];
+  document.getElementById(tab+'-project-list').style.display = 'block';
+  document.getElementById(tab+'-project-detail').style.display = 'none';
+  loadProjects();
+}
+
+async function refreshProject() {
+  if (!currentProjId) return;
+  document.getElementById('review-items-list').innerHTML = `<div class="empty"><div class="spinner spinner-lg"></div><p>Refreshing…</p></div>`;
+  await loadProjects();
+  await loadProjectItems(currentProjId);
+  const p = projects.find(x=>x.id===currentProjId);
+  if (p) renderReviewDetail(p);
+}
+
+function handleFieldFiles(e) {
+  Array.from(e.target.files).forEach(file => {
+    const mime = file.type||'image/jpeg';
+    const reader = new FileReader();
+    reader.onload = ev => {
+      compressImage(ev.target.result, (compressed, b64) => {
+        stagedItems.push({name:'',notes:'',base64:b64,mime,preview:compressed});
+        renderStaged();
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+
+function compressImage(dataUrl, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    const MAX = 1200;
+    let w=img.width, h=img.height;
+    if (w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+    if (h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+    canvas.width=w; canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    const compressed = canvas.toDataURL('image/jpeg',0.82);
+    cb(compressed, compressed.split(',')[1]);
+  };
+  img.src = dataUrl;
+}
+
+function renderStaged() {
+  const wrap = document.getElementById('field-staged');
+  document.getElementById('staged-count').textContent = stagedItems.length;
+  if (stagedItems.length===0){wrap.style.display='none';return;}
+  wrap.style.display = 'block';
+  document.getElementById('staged-list').innerHTML = stagedItems.map((item,i)=>`
+    <div class="card card-body" style="margin-bottom:9px;display:flex;gap:10px;align-items:flex-start;">
+      <img src="${item.preview}" style="width:60px;height:60px;border-radius:8px;object-fit:cover;border:1.5px solid var(--border);flex-shrink:0;">
+      <div style="flex:1;min-width:0;">
+        <input type="text" placeholder="Item name (optional)" value="${item.name}" oninput="stagedItems[${i}].name=this.value" style="margin-bottom:6px;font-size:.85rem;padding:7px 10px;">
+        <input type="text" placeholder="Notes / location (optional)" value="${item.notes}" oninput="stagedItems[${i}].notes=this.value" style="font-size:.85rem;padding:7px 10px;">
+      </div>
+      <button onclick="removeStaged(${i})" style="background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;flex-shrink:0;padding:4px;">✕</button>
+    </div>`).join('');
+}
+
+function removeStaged(i){stagedItems.splice(i,1);renderStaged();}
+
+async function submitStagedItems() {
+  if (stagedItems.length===0) return;
+  const btn = document.querySelector('#field-staged .btn-primary');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Uploading…';
+  setSyncState('syncing');
+  const rows = stagedItems.map((s,idx)=>({
+    project_id:currentProjId, name:s.name||null, field_notes:s.notes||null,
+    image_base64:s.base64, image_mime:s.mime,
+    submitted_at:new Date().toISOString(), valuation:null, manual_value:null, reviewer_notes:null, status:'pending'
+  }));
+  try {
+    const {error} = await db.from('ve_items').insert(rows);
+    if (error) throw error;
+    const {data:cd} = await db.from('ve_items').select('id',{count:'exact'}).eq('project_id',currentProjId);
+    const {data:pd} = await db.from('ve_items').select('id',{count:'exact'}).eq('project_id',currentProjId).is('valuation',null).is('manual_value',null);
+    await db.from('ve_projects').update({item_count:cd?.length||0,pending_count:pd?.length||0}).eq('id',currentProjId);
+    setSyncState('ok');
+    const count=stagedItems.length; stagedItems=[]; renderStaged();
+    const s=document.getElementById('field-success');
+    s.textContent=`✅ ${count} item${count!==1?'s':''} submitted successfully!`;
+    s.style.display='block';
+    setTimeout(()=>s.style.display='none',4000);
+  } catch(e) {
+    setSyncState('error');
+    const er=document.getElementById('field-error');
+    er.textContent='⚠ Upload failed: '+e.message; er.style.display='block';
+  }
+  btn.disabled=false; btn.innerHTML='Submit All to Project →';
+}
+
+function renderReviewDetail(p) {
+  const items=currentItems;
+  const pending=items.filter(i=>!i.valuation&&i.manual_value===null);
+  let tl=0,te=0,th=0;
+  items.forEach(i=>{
+    if(i.manual_value!==null){tl+=i.manual_value;te+=i.manual_value;th+=i.manual_value;}
+    else if(i.valuation){const v=i.valuation.parsed||{};tl+=v.low||0;te+=v.expected||0;th+=v.high||0;}
+  });
+  document.getElementById('review-proj-header').innerHTML=`
+    <h2>${esc(p.name)}</h2>
+    <div class="ph-meta">${esc(p.address||'')}${p.date?' · '+formatDate(p.date):''} · ${items.length} item${items.length!==1?'s':''}</div>
+    <div class="totals-row">
+      <div class="total-chip"><div class="tc-num">${fmt(tl)}</div><div class="tc-lbl">Total Low</div></div>
+      <div class="total-chip"><div class="tc-num">${fmt(te)}</div><div class="tc-lbl">Expected</div></div>
+      <div class="total-chip"><div class="tc-num">${fmt(th)}</div><div class="tc-lbl">Total High</div></div>
+      <div class="total-chip"><div class="tc-num">${items.length}</div><div class="tc-lbl">Items</div></div>
+    </div>`;
+  const qb=document.getElementById('queue-banner');
+  if(pending.length>0){qb.style.display='block';qb.innerHTML=`<span class="spinner"></span> ${pending.length} item${pending.length!==1?'s':''} pending — click <strong>⚡ Value All Pending</strong> to analyze.`;}
+  else{qb.style.display='none';}
+  if(items.length===0){document.getElementById('review-items-list').innerHTML=`<div class="empty"><div class="ei">📭</div><p>No items yet.<br>Have your employee submit photos from the Field tab.</p></div>`;return;}
+  document.getElementById('review-items-list').innerHTML=items.map(item=>renderItemCard(item)).join('');
+}
+
+function renderItemCard(item) {
+  const v=item.valuation?(item.valuation.parsed||{}):{}; 
+  const hasValue=item.valuation||(item.manual_value!==null);
+  const conf=item.valuation?(item.valuation.confidence||0):0;
+  const confPct=Math.round(conf*100);
+  const confLabel=conf>=.8?'High':conf>=.5?'Medium':conf>0?'Low':'';
+  const thumb=item.image_base64?`<img class="item-thumb" src="data:${item.image_mime};base64,${item.image_base64}">`:`<div class="item-thumb-ph">🖼</div>`;
+  const badge=item.manual_value!==null?`<span class="badge badge-manual">Manual: ${fmt(item.manual_value)}</span>`:item.valuation?`<span class="badge badge-valued">Valued</span>`:`<span class="badge badge-pending">Pending</span>`;
+  const compsHtml=item.valuation&&item.valuation.comps&&item.valuation.comps.length?`
+    <div class="comps-section">
+      <div class="comps-title">🔍 Comparable Sales — 11 Sources</div>
+      ${item.valuation.comps.map(c=>`<a class="comp-link" href="${c.url}" target="_blank" rel="noopener">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(c.title)}</span>
+        ${c.price?`<span class="comp-price">${esc(c.price)}</span>`:''}
+        <span class="comp-source">${esc(c.source)}</span>
+      </a>`).join('')}
+    </div>`:'';
+  return `<div class="item-card" id="icard-${item.id}">
+    <div class="item-top">
+      ${thumb}
+      <div class="item-info">
+        <div class="item-name">${esc(item.name||'Unnamed Item')}</div>
+        ${item.field_notes?`<div class="item-note">${esc(item.field_notes)}</div>`:''}
+        <div class="item-badges">${badge}${confLabel?`<span class="badge" style="background:var(--fog);color:var(--muted);border:1px solid var(--border)">${confLabel} conf.</span>`:''}</div>
+        ${conf>0?`<div class="conf-bar"><div class="conf-track"><div class="conf-fill" style="width:${confPct}%"></div></div><span class="conf-label">${confPct}%</span></div>`:''}
+      </div>
+      <button class="btn btn-outline btn-sm" style="flex-shrink:0;align-self:flex-start;" onclick="toggleValPanel('${item.id}')">▾</button>
+    </div>
+    <div class="val-panel" id="vp-${item.id}">
+      ${hasValue?`<div class="val-grid">
+        <div class="val-cell"><div class="vc-amt">${item.manual_value!==null?fmt(item.manual_value):fmt(v.low)}</div><div class="vc-lbl">${item.manual_value!==null?'Manual':'Low'}</div></div>
+        <div class="val-cell expected"><div class="vc-amt">${item.manual_value!==null?fmt(item.manual_value):fmt(v.expected)}</div><div class="vc-lbl">${item.manual_value!==null?'Override':'Expected'}</div></div>
+        <div class="val-cell"><div class="vc-amt">${item.manual_value!==null?fmt(item.manual_value):fmt(v.high)}</div><div class="vc-lbl">${item.manual_value!==null?'Manual':'High'}</div></div>
+      </div>`:`<div style="color:var(--muted);font-size:.85rem;font-style:italic;margin-bottom:12px;">Not yet valued. <button class="btn btn-gold btn-sm" onclick="valueSingleItem('${item.id}')">Value Now</button></div>`}
+      ${item.valuation&&item.valuation.description?`<div style="font-size:.82rem;color:var(--muted);line-height:1.65;margin-bottom:10px;padding:10px;background:var(--fog);border-radius:8px;">${esc(item.valuation.description)}</div>`:''}
+      ${compsHtml}
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+        <div class="lbl" style="margin-bottom:6px;">✏️ Manual Value Override</div>
+        <div class="manual-edit">
+          <input type="number" id="mv-${item.id}" placeholder="e.g. 250" value="${item.manual_value!==null?item.manual_value:''}">
+          <button class="btn btn-outline btn-sm" onclick="setManualValue('${item.id}')">Set Value</button>
+          ${item.manual_value!==null?`<button class="btn btn-rust btn-sm" onclick="clearManualValue('${item.id}')">Clear</button>`:''}
+        </div>
+      </div>
+      <div class="notes-area">
+        <div class="lbl" style="margin-bottom:5px;">Reviewer Notes</div>
+        <textarea id="rn-${item.id}" placeholder="Add your notes…">${esc(item.reviewer_notes||'')}</textarea>
+        <button class="btn btn-sage btn-sm" style="margin-top:6px;" onclick="saveNote('${item.id}')">Save Note</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleValPanel(id){const vp=document.getElementById('vp-'+id);vp.style.display=vp.style.display==='block'?'none':'block';}
+
+async function valueAllPending() {
+  const pending=currentItems.filter(i=>!i.valuation&&i.manual_value===null&&i.image_base64);
+  if(pending.length===0){alert('No pending items to value.');return;}
+  for(const item of pending){await valueSingleItem(item.id,true);}
+  const p=projects.find(x=>x.id===currentProjId);
+  if(p) renderReviewDetail(p);
+}
+
+async function valueSingleItem(itemId, batchMode=false) {
+  const item=currentItems.find(i=>i.id===itemId);
+  if(!item||!item.image_base64) return;
+  const vp=document.getElementById('vp-'+itemId);
+  if(vp){vp.style.display='block';vp.innerHTML=`<div style="padding:12px;color:var(--muted);font-size:.85rem;font-style:italic;text-align:center;"><span class="spinner"></span>Analyzing item and searching auction sources…</div>`;}
+
+  const prompt = `You are an expert antique and collectibles appraiser with 30 years of experience. Analyze this photo carefully.
+
+Return ONLY a valid JSON object (no markdown, no backticks, no explanation) in this exact format:
+{
+  "name": "Concise descriptive item name (5-8 words)",
+  "description": "2-3 sentences: item type, approximate era/decade, material/construction, country of origin, any visible maker marks or signatures, notable features",
+  "low": 75,
+  "expected": 225,
+  "high": 450,
+  "confidence": 0.72,
+  "comps": [
+    {"title":"Specific comparable item","price":"$195","source":"eBay Sold","url":"https://www.ebay.com/sch/i.html?_nkw=KEYWORDS&LH_Sold=1&LH_Complete=1"},
+    {"title":"Specific comparable item","price":"$280","source":"LiveAuctioneers","url":"https://www.liveauctioneers.com/search/?keyword=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$150","source":"WorthPoint","url":"https://www.worthpoint.com/worthopedia/KEYWORDS"},
+    {"title":"Specific comparable item","price":"$320","source":"Heritage Auctions","url":"https://www.ha.com/c/search-results.zx?N=0+231+790&Ntt=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$175","source":"Invaluable","url":"https://www.invaluable.com/search/#keywords=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$210","source":"Bidsquare","url":"https://www.bidsquare.com/search?q=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$165","source":"K-Bid","url":"https://www.k-bid.com/auction/search?q=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$190","source":"Hi-Bid","url":"https://www.hibid.com/search?q=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$240","source":"Bid-2-Buy","url":"https://bid2buy.net/search?q=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$200","source":"AuctionNinja","url":"https://www.auctionninja.com/search?q=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$185","source":"Google","url":"https://www.google.com/search?q=KEYWORDS+auction+sold+price+antique"}
+  ]
+}
+Replace KEYWORDS in every URL with 3-5 actual search terms for this specific item (use + between words). low/expected/high are whole dollar integers. confidence is 0.0 to 1.0. Return ONLY the JSON.`;
+
+  try {
+    const resp = await fetch(API_ENDPOINT, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514', max_tokens:1500,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:item.image_mime,data:item.image_base64}},
+          {type:'text',text:prompt}
+        ]}]
+      })
+    });
+    const data=await resp.json();
+    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+    const raw=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    const valuation={parsed:{low:parsed.low||0,expected:parsed.expected||0,high:parsed.high||0},confidence:parsed.confidence||0,description:parsed.description||'',comps:parsed.comps||[]};
+    setSyncState('syncing');
+    const updateData={valuation,status:'valued'};
+    if(parsed.name&&(!item.name||item.name==='')) updateData.name=parsed.name;
+    const {error}=await db.from('ve_items').update(updateData).eq('id',itemId);
+    if(error) throw error;
+    const idx=currentItems.findIndex(i=>i.id===itemId);
+    if(idx>=0) currentItems[idx]={...currentItems[idx],...updateData};
+    const pendingCount=currentItems.filter(i=>!i.valuation&&i.manual_value===null).length;
+    await db.from('ve_projects').update({pending_count:pendingCount}).eq('id',currentProjId);
+    setSyncState('ok');
+  } catch(e) {
+    setSyncState('error');
+    const idx=currentItems.findIndex(i=>i.id===itemId);
+    if(idx>=0) currentItems[idx].valuation={parsed:{low:0,expected:0,high:0},confidence:0,description:'Error: '+e.message,comps:[]};
+    console.error('Valuation error:',e);
+  }
+  if(!batchMode){const p=projects.find(x=>x.id===currentProjId);if(p)renderReviewDetail(p);}
+}
+
+async function setManualValue(itemId) {
+  const val=parseFloat(document.getElementById('mv-'+itemId).value);
+  if(isNaN(val)||val<0){alert('Please enter a valid dollar amount.');return;}
+  setSyncState('syncing');
+  try{
+    const {error}=await db.from('ve_items').update({manual_value:val}).eq('id',itemId);
+    if(error) throw error;
+    const idx=currentItems.findIndex(i=>i.id===itemId);
+    if(idx>=0) currentItems[idx].manual_value=val;
+    setSyncState('ok');
+    const p=projects.find(x=>x.id===currentProjId);if(p)renderReviewDetail(p);
+  }catch(e){setSyncState('error');alert('Save failed: '+e.message);}
+}
+
+async function clearManualValue(itemId) {
+  setSyncState('syncing');
+  try{
+    const {error}=await db.from('ve_items').update({manual_value:null}).eq('id',itemId);
+    if(error) throw error;
+    const idx=currentItems.findIndex(i=>i.id===itemId);
+    if(idx>=0) currentItems[idx].manual_value=null;
+    setSyncState('ok');
+    const p=projects.find(x=>x.id===currentProjId);if(p)renderReviewDetail(p);
+  }catch(e){setSyncState('error');alert('Clear failed: '+e.message);}
+}
+
+async function saveNote(itemId) {
+  const notes=document.getElementById('rn-'+itemId).value;
+  setSyncState('syncing');
+  try{
+    const {error}=await db.from('ve_items').update({reviewer_notes:notes}).eq('id',itemId);
+    if(error) throw error;
+    const idx=currentItems.findIndex(i=>i.id===itemId);
+    if(idx>=0) currentItems[idx].reviewer_notes=notes;
+    setSyncState('ok');
+    const btn=event.target,orig=btn.textContent;
+    btn.textContent='Saved ✓';btn.style.background='var(--sage)';btn.style.color='#fff';
+    setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';},2000);
+  }catch(e){setSyncState('error');alert('Save failed: '+e.message);}
+}
+
+function exportProjectCSV() {
+  const items=currentItems;
+  if(items.length===0){alert('No items to export.');return;}
+  const p=projects.find(x=>x.id===currentProjId);
+  const rows=[['Item Name','Field Notes','Low ($)','Expected ($)','High ($)','Confidence %','Manual Override ($)','AI Description','Reviewer Notes','Submitted']];
+  items.forEach(i=>{
+    const v=i.valuation?(i.valuation.parsed||{}):{};
+    rows.push([i.name||'Unnamed',i.field_notes||'',v.low||'',v.expected||'',v.high||'',i.valuation?Math.round((i.valuation.confidence||0)*100)+'%':'',i.manual_value!==null?i.manual_value:'',i.valuation?(i.valuation.description||'').replace(/\n/g,' '):'',i.reviewer_notes||'',new Date(i.submitted_at).toLocaleDateString()]);
+  });
+  let tl=0,te=0,th=0;
+  items.forEach(i=>{if(i.manual_value!==null){tl+=i.manual_value;te+=i.manual_value;th+=i.manual_value;}else if(i.valuation){const v=i.valuation.parsed||{};tl+=v.low||0;te+=v.expected||0;th+=v.high||0;}});
+  rows.push(['TOTALS','','$'+tl.toLocaleString(),'$'+te.toLocaleString(),'$'+th.toLocaleString(),'','','','','']);
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=(p?p.name.replace(/[^a-z0-9]/gi,'-'):'project')+'-valueeye.csv';a.click();
+}
+
+function openNewProjectModal(target){
+  newProjTarget=target;
+  document.getElementById('newProjDate').value=new Date().toISOString().split('T')[0];
+  ['newProjName','newProjAddr','newProjNotes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('newProjModal').classList.add('open');
+}
+function closeModal(){document.getElementById('newProjModal').classList.remove('open');}
+
+async function createProject(){
+  const name=document.getElementById('newProjName').value.trim();
+  const addr=document.getElementById('newProjAddr').value.trim();
+  if(!name){alert('Please enter a project name.');return;}
+  const btn=document.getElementById('createProjBtn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Creating…';
+  setSyncState('syncing');
+  try{
+    const {data,error}=await db.from('ve_projects').insert({name,address:addr,date:document.getElementById('newProjDate').value,notes:document.getElementById('newProjNotes').value.trim(),item_count:0,pending_count:0,created_at:new Date().toISOString()}).select().single();
+    if(error) throw error;
+    setSyncState('ok');projects.unshift(data);closeModal();renderProjectLists();openProject(data.id,newProjTarget);
+  }catch(e){setSyncState('error');alert('Failed to create project: '+e.message);}
+  btn.disabled=false;btn.textContent='Create Project';
+}
+
+function fmt(n){if(!n&&n!==0)return'—';return'$'+Math.round(n).toLocaleString();}
+function formatDate(d){if(!d)return'';const dt=new Date(d+'T12:00:00');return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+function esc(str){return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+loadProjects();
+</script>
+</body>
+</html>
