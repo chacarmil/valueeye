@@ -159,11 +159,16 @@ textarea{resize:vertical;min-height:68px;}
       <div id="field-proj-title" style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:600;margin-bottom:2px;"></div>
       <div id="field-proj-addr" style="font-size:.82rem;color:var(--muted);"></div>
     </div>
-    <div class="upload-zone">
-      <input type="file" accept="image/*" capture="environment" id="fieldFileInput" multiple onchange="handleFieldFiles(event)"/>
-      <div class="uz-icon">📸</div>
-      <strong>Tap to photograph items</strong>
-      <p>Multiple photos supported · JPG, PNG, WEBP</p>
+    <div class="upload-zone" style="cursor:default;">
+      <input type="file" accept="image/*" capture="environment" id="fieldFileCamera" multiple onchange="handleFieldFiles(event)" style="display:none"/>
+      <input type="file" accept="image/*" id="fieldFileLibrary" multiple onchange="handleFieldFiles(event)" style="display:none"/>
+      <div class="uz-icon">📷</div>
+      <strong style="margin-bottom:12px;">Add Item Photos</strong>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('fieldFileCamera').click()">📸 Take Photo</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('fieldFileLibrary').click()">🖼 Choose from Library</button>
+      </div>
+      <p style="margin-top:10px;">Multiple photos supported · JPG, PNG, WEBP</p>
     </div>
     <div id="field-staged" style="display:none;margin-bottom:14px;">
       <div class="lbl" style="margin-bottom:8px;">Ready to Submit (<span id="staged-count">0</span>)</div>
@@ -533,7 +538,10 @@ Replace KEYWORDS in every URL with 3-5 actual search terms for this specific ite
     const data=await resp.json();
     if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
     const raw=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
-    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    // Robustly extract JSON — find the first { ... } block regardless of surrounding text
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response. Raw: ' + raw.substring(0,200));
+    const parsed=JSON.parse(jsonMatch[0]);
     const valuation={parsed:{low:parsed.low||0,expected:parsed.expected||0,high:parsed.high||0},confidence:parsed.confidence||0,description:parsed.description||'',comps:parsed.comps||[]};
     setSyncState('syncing');
     const updateData={valuation,status:'valued'};
@@ -643,3 +651,4 @@ loadProjects();
 </script>
 </body>
 </html>
+
