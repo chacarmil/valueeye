@@ -509,17 +509,17 @@ Return ONLY a valid JSON object (no markdown, no backticks, no explanation) in t
   "high": 450,
   "confidence": 0.72,
   "comps": [
-    {"title":"Specific comparable item","price":"$195","source":"eBay Sold","url":"https://www.ebay.com/sch/i.html?_nkw=KEYWORDS&LH_Sold=1&LH_Complete=1"},
+    {"title":"Specific comparable item","price":"$195","source":"eBay Sold","url":"https://www.ebay.com/sch/i.html?_nkw=KEYWORDS"},
     {"title":"Specific comparable item","price":"$280","source":"LiveAuctioneers","url":"https://www.liveauctioneers.com/search/?keyword=KEYWORDS"},
     {"title":"Specific comparable item","price":"$150","source":"WorthPoint","url":"https://www.worthpoint.com/worthopedia/KEYWORDS"},
-    {"title":"Specific comparable item","price":"$320","source":"Heritage Auctions","url":"https://www.ha.com/c/search-results.zx?N=0+231+790&Ntt=KEYWORDS"},
-    {"title":"Specific comparable item","price":"$175","source":"Invaluable","url":"https://www.invaluable.com/search/#keywords=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$320","source":"Heritage Auctions","url":"https://www.ha.com/c/search-results.zx?Ntt=KEYWORDS"},
+    {"title":"Specific comparable item","price":"$175","source":"Invaluable","url":"https://www.invaluable.com/search/?keywords=KEYWORDS"},
     {"title":"Specific comparable item","price":"$210","source":"Bidsquare","url":"https://www.bidsquare.com/search?q=KEYWORDS"},
     {"title":"Specific comparable item","price":"$165","source":"K-Bid","url":"https://www.k-bid.com/auction/search?q=KEYWORDS"},
     {"title":"Specific comparable item","price":"$190","source":"Hi-Bid","url":"https://www.hibid.com/search?q=KEYWORDS"},
     {"title":"Specific comparable item","price":"$240","source":"Bid-2-Buy","url":"https://bid2buy.net/search?q=KEYWORDS"},
     {"title":"Specific comparable item","price":"$200","source":"AuctionNinja","url":"https://www.auctionninja.com/search?q=KEYWORDS"},
-    {"title":"Specific comparable item","price":"$185","source":"Google","url":"https://www.google.com/search?q=KEYWORDS+auction+sold+price+antique"}
+    {"title":"Specific comparable item","price":"$185","source":"Google","url":"https://www.google.com/search?q=KEYWORDS+antique+auction+value"}
   ]
 }
 Replace KEYWORDS in every URL with 3-5 actual search terms for this specific item (use + between words). low/expected/high are whole dollar integers. confidence is 0.0 to 1.0. Return ONLY the JSON.`;
@@ -535,29 +535,54 @@ Replace KEYWORDS in every URL with 3-5 actual search terms for this specific ite
         ]}]
       })
     });
-    const data=await resp.json();
-    if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-    const raw=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
-    // Robustly extract JSON — find the first { ... } block regardless of surrounding text
+
+    if(!resp.ok) {
+      const errText = await resp.text();
+      throw new Error('API HTTP ' + resp.status + ': ' + errText.substring(0,300));
+    }
+
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    if(!data.content || !data.content.length) throw new Error('Empty response from API. Full response: ' + JSON.stringify(data).substring(0,300));
+
+    const raw = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    if(!raw) throw new Error('No text content in API response');
+
+    // Extract JSON — find outermost { } block
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON found in response. Raw: ' + raw.substring(0,200));
-    const parsed=JSON.parse(jsonMatch[0]);
-    const valuation={parsed:{low:parsed.low||0,expected:parsed.expected||0,high:parsed.high||0},confidence:parsed.confidence||0,description:parsed.description||'',comps:parsed.comps||[]};
+    if(!jsonMatch) throw new Error('No JSON object found in response: ' + raw.substring(0,300));
+
+    let parsed;
+    try { parsed = JSON.parse(jsonMatch[0]); }
+    catch(parseErr) { throw new Error('JSON parse failed: ' + parseErr.message + ' | Raw: ' + jsonMatch[0].substring(0,200)); }
+
+    const valuation = {
+      parsed: { low: parseInt(parsed.low)||0, expected: parseInt(parsed.expected)||0, high: parseInt(parsed.high)||0 },
+      confidence: parseFloat(parsed.confidence)||0,
+      description: String(parsed.description||''),
+      comps: Array.isArray(parsed.comps) ? parsed.comps : []
+    };
+
     setSyncState('syncing');
-    const updateData={valuation,status:'valued'};
-    if(parsed.name&&(!item.name||item.name==='')) updateData.name=parsed.name;
-    const {error}=await db.from('ve_items').update(updateData).eq('id',itemId);
-    if(error) throw error;
-    const idx=currentItems.findIndex(i=>i.id===itemId);
-    if(idx>=0) currentItems[idx]={...currentItems[idx],...updateData};
-    const pendingCount=currentItems.filter(i=>!i.valuation&&i.manual_value===null).length;
+    const updateData = { valuation: valuation, status: 'valued' };
+    if(parsed.name && (!item.name || item.name === '')) updateData.name = String(parsed.name);
+
+    const {error} = await db.from('ve_items').update(updateData).eq('id', itemId);
+    if(error) throw new Error('Supabase save error: ' + error.message + ' | Code: ' + error.code + ' | Details: ' + error.details);
+
+    const idx = currentItems.findIndex(i=>i.id===itemId);
+    if(idx>=0) currentItems[idx] = {...currentItems[idx], ...updateData};
+    const pendingCount = currentItems.filter(i=>!i.valuation && i.manual_value===null).length;
     await db.from('ve_projects').update({pending_count:pendingCount}).eq('id',currentProjId);
     setSyncState('ok');
+
   } catch(e) {
     setSyncState('error');
-    const idx=currentItems.findIndex(i=>i.id===itemId);
-    if(idx>=0) currentItems[idx].valuation={parsed:{low:0,expected:0,high:0},confidence:0,description:'Error: '+e.message,comps:[]};
-    console.error('Valuation error:',e);
+    const errMsg = e.message || String(e);
+    alert('Valuation failed: ' + errMsg);
+    console.error('Valuation error full:', e);
+    const idx = currentItems.findIndex(i=>i.id===itemId);
+    if(idx>=0) currentItems[idx].valuation = {parsed:{low:0,expected:0,high:0},confidence:0,description:'Error: '+errMsg,comps:[]};
   }
   if(!batchMode){const p=projects.find(x=>x.id===currentProjId);if(p)renderReviewDetail(p);}
 }
@@ -651,4 +676,5 @@ loadProjects();
 </script>
 </body>
 </html>
+
 
